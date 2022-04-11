@@ -1,0 +1,143 @@
+---
+title: "Exercise10"
+author: "Matt Ming"
+date: "4/9/2022"
+output: html_document
+---
+
+# Coding Challenge
+
+Load in necessary packages
+
+```{r}
+library(readr)
+library(ggplot2)
+library(dplyr)
+```
+
+Load in the Kamilar and Cooper 2013 dataset
+
+```{r}
+f <- "https://raw.githubusercontent.com/difiore/ada-2022-datasets/main/KamilarAndCooperData.csv"
+d <- read_csv(f)
+```
+
+Plot lifespan (MaxLongevity_m) versus female body mass (Body_mass_female_mean).
+Is the relationship linear? Can we transform the data?
+
+```{r}
+p <- d %>% select(MaxLongevity_m,Body_mass_female_mean) %>% 
+  na.omit() %>% ggplot(aes(MaxLongevity_m,Body_mass_female_mean))
+p <- p + geom_point()
+print(p)
+```
+
+From visual inspection, it does not appear that this relationship is linear, as
+we see many points with low female body mass but there are a couple points with
+high longevity which also have high female body mass.  It seems like this data
+could be transformed using a log scale, but from pure visual inspection it is
+difficult to tell which axis (or both) should be transformed.
+
+Run linear models of lifespan ~ F body mass, lifespan ~ log(F body mass), and
+log(lifespan) ~ log(F body mass)
+
+```{r}
+d2 <- d %>% select(MaxLongevity_m,Body_mass_female_mean) %>% na.omit() %>%
+  mutate(LogLongevity = log(MaxLongevity_m),
+         LogFemBM = log(Body_mass_female_mean))
+
+p1 <- ggplot(d2,aes(MaxLongevity_m,Body_mass_female_mean)) + geom_point()
+p2 <- ggplot(d2,aes(MaxLongevity_m,LogFemBM)) + geom_point()
+p3 <- ggplot(d2,aes(LogLongevity,LogFemBM)) + geom_point()
+
+print(p1)
+print(p2)
+print(p3)
+
+m1 <- lm(MaxLongevity_m ~ Body_mass_female_mean,data = d2)
+m2 <- lm(MaxLongevity_m ~ LogFemBM,data = d2)
+m3 <- lm(LogLongevity ~ LogFemBM,data = d2)
+
+cat("The coefficients for:\n\n")
+cat("Lifespan ~ Female body mass:           B_0 =",m1$coefficients[1],
+    "   B1 =",m1$coefficients[2],"\n")
+cat("Lifespan ~ log(Female body mass):      B_0 =",m2$coefficients[1],
+    "  B1 =",m2$coefficients[2],"\n")
+cat("log(Lifespan) ~ log(Female body mass): B_0 =",m3$coefficients[1],
+    "   B1 =",m3$coefficients[2],"\n")
+```
+
+Generate residuals for all three linear models, plot in relation to
+corresponding explanatory variable, and make histogram of residuals
+
+```{r}
+d2 <- mutate(d2,r1 = m1$residuals,r2 = m2$residuals,r3 = m3$residuals)
+rp1 <- ggplot(d2,aes(r1,Body_mass_female_mean)) + geom_point()
+rp2 <- ggplot(d2,aes(r2,LogFemBM)) + geom_point()
+rp3 <- ggplot(d2,aes(r3,LogFemBM)) + geom_point()
+h1 <- ggplot(d2,aes(r1)) + geom_histogram(color = "black",fill = "skyblue",bins = 30)
+h2 <- ggplot(d2,aes(r2)) + geom_histogram(color = "black",fill = "skyblue",bins = 30)
+h3 <- ggplot(d2,aes(r3)) + geom_histogram(color = "black",fill = "skyblue",bins = 30)
+
+print(rp1)
+print(rp2)
+print(rp3)
+print(h1)
+print(h2)
+print(h3)
+
+```
+
+Generate QQ plots for all three models. Do they appear normally distributed?
+
+```{r}
+qq1 <- ggplot(d2) + geom_qq(mapping = aes(sample = r1)) + 
+  geom_qq_line(mapping = aes(sample = r1),color = "red")
+qq2 <- ggplot(d2) + geom_qq(mapping = aes(sample = r2)) + 
+  geom_qq_line(mapping = aes(sample = r2),color = "red")
+qq3 <- ggplot(d2) + geom_qq(mapping = aes(sample = r3)) + 
+  geom_qq_line(mapping = aes(sample = r3),color = "red")
+
+print(qq1)
+print(qq2)
+print(qq3)
+```
+
+Based on these plots, it appears that the model where both variables are log-
+transformed is the closest fit to a normal distribution, and the model where
+neither variable is log-transformed is the least-close fit.
+
+Run the plot() command for all three models.  What do the plots suggest?
+
+```{r}
+plot(m1)
+plot(m2)
+plot(m3)
+```
+
+These plots, especially the Residuals vs. Leverage and Residuals vs. Fitted
+plots, show us if the residuals independent and don't correlate with the
+explanatory variable.  In this case, it seems like there is slight correlation
+in the residuals and the variables for the not-log transformed, and only 
+body mass log-transformed cases, meaning that we can not just accept the
+core premise that the relationship between the variables is linear.  However,
+for the plots where both variables are log-transformed, we see a straighter line
+for the residuals indicating greater independence, and thus lending greater
+support for using this linear model.
+
+Run a Shapiro-Wilk Test on residuals for all 3 models.  What do the results
+suggest?
+
+```{r}
+shapiro.test(d2$r1)
+shapiro.test(d2$r2)
+shapiro.test(d2$r3)
+```
+
+These results suggest that both model 1 (no log transformation) and model 2 (log
+tranformation of Female Body Mass only) have residuals which are not good fits
+to a normal distribution because the p-values were very low, meaning that we
+cannot accept the null hypothesis that the residuals are normal, and thus these
+models are not good models for linear regression.  The model where both
+variables are log transformed is the best fit to a linear regression.
+
